@@ -125,7 +125,9 @@
     <script>
         const inputField = document.getElementById("user-input");
         const sendBtn = document.getElementById("send-btn");
-        let memoireGlobale = "Contexte de la discussion : ";
+        
+        // On intègre la consigne directe dans la mémoire pour qu'elle sache qu'elle s'appelle Lulu GPT
+        let memoireGlobale = "Tu es Lulu GPT, un assistant virtuel créé pour Lucas. Contexte de la discussion : ";
 
         inputField.addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
@@ -158,7 +160,7 @@
                 let data = await reponse.text();
 
                 if (!data || data.trim() === "{}" || data.trim() === "" || data.includes("{}")) {
-                    data = "C'est super intéressant ! Dis-moi-en plus.";
+                    data = "Je suis Lulu GPT ! Que puis-je faire pour toi ?";
                 }
 
                 document.getElementById(loadingId).innerText = data;
