@@ -126,8 +126,8 @@
         const inputField = document.getElementById("user-input");
         const sendBtn = document.getElementById("send-btn");
         
-        // On intègre la consigne directe dans la mémoire pour qu'elle sache qu'elle s'appelle Lulu GPT
-        let memoireGlobale = "Tu es Lulu GPT, un assistant virtuel créé pour Lucas. Contexte de la discussion : ";
+        // Consigne stricte pour son identité
+        let memoireGlobale = "Règle absolue : Tu t'appelles exclusivement Lulu GPT. Tu n'es pas ChatGPT ni une IA d'OpenAI. Contexte de la discussion : ";
 
         inputField.addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
@@ -141,13 +141,11 @@
 
             const chatContainer = document.getElementById("chat-container");
             
-            // Bulle utilisateur
             chatContainer.innerHTML += `<div class="msg user">${texte}</div>`;
             inputField.value = "";
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
             const loadingId = "load-" + Date.now();
-            // Bulle d'attente IA
             chatContainer.innerHTML += `<div class="msg bot" id="${loadingId}">Réflexion en cours...</div>`;
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
