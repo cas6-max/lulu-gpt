@@ -23,6 +23,9 @@
         const inputField = document.getElementById("user-input");
         const sendBtn = document.getElementById("send-btn");
 
+        // Mémoire locale de la discussion pour que l'IA se souvienne de tout
+        let memoireGlobale = "Contexte de la discussion : ";
+
         inputField.addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
                 envoyer();
@@ -35,7 +38,7 @@
 
             const chatContainer = document.getElementById("chat-container");
             
-            // Afficher ton message
+            // Afficher ton message à l'écran
             chatContainer.innerHTML += `<div class="msg user">> Toi : ${texte}</div>`;
             inputField.value = "";
             chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -48,28 +51,31 @@
             sendBtn.disabled = true;
 
             try {
-                // On utilise une autre route alternative de Pollinations dédiée aux objets JSON propres
-                const reponse = await fetch('https://text.pollinations.ai/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        messages: [{ role: "user", content: texte }],
-                        model: "openai",
-                        json: false
-                    } )
-                });
+                // On combine la mémoire des derniers échanges avec ta nouvelle phrase
+                memoireGlobale += " Utilisateur: " + texte;
 
+                // On envoie le tout dans l'URL avec un modèle très stable
+                const reponse = await fetch(`https://text.pollinations.ai/${encodeURIComponent(memoireGlobale)}?model=openai`);
                 let data = await reponse.text();
 
-                // Si jamais il y a encore un {} ou que c'est vide, on met un message de secours
-                if (!data || data.includes("{}") || data.trim() === "") {
-                    data = "Salut ! Je suis en ligne. Dis-moi, qu'est-ce qu'on fait ?";
+                // Si l'API renvoie le fameux bug {}, on met une réponse de secours sans perdre la mémoire
+                if (!data || data.trim() === "{}" || data.trim() === "") {
+                    data = "Je suis là ! Continue, je t'écoute.";
                 }
 
+                // Afficher la réponse de l'IA
                 document.getElementById(loadingId).innerText = `> IA : ${data}`;
 
+                // On ajoute la réponse de l'IA dans la mémoire globale pour qu'elle s'en souvienne au prochain message
+                memoireGlobale += " Assistant: " + data;
+
+                // Sécurité : si la mémoire devient trop longue, on garde les 1000 derniers caractères pour ne pas saturer
+                if (memoireGlobale.length > 2000) {
+                    memoireGlobale = memoireGlobale.slice(-1500);
+                }
+
             } catch (error) {
-                document.getElementById(loadingId).innerText = `> Erreur réseau. Réessaie dans une seconde.`;
+                document.getElementById(loadingId).innerText = `> Erreur réseau. Réessaie !`;
             }
 
             sendBtn.disabled = false;
