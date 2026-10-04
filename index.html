@@ -23,7 +23,6 @@
         const inputField = document.getElementById("user-input");
         const sendBtn = document.getElementById("send-btn");
 
-        // Mémoire locale de la discussion pour que l'IA se souvienne de tout
         let memoireGlobale = "Contexte de la discussion : ";
 
         inputField.addEventListener("keypress", function(event) {
@@ -38,12 +37,10 @@
 
             const chatContainer = document.getElementById("chat-container");
             
-            // Afficher ton message à l'écran
             chatContainer.innerHTML += `<div class="msg user">> Toi : ${texte}</div>`;
             inputField.value = "";
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            // Message d'attente
             const loadingId = "load-" + Date.now();
             chatContainer.innerHTML += `<div class="msg bot" id="${loadingId}">> Réflexion en cours...</div>`;
             chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -51,25 +48,20 @@
             sendBtn.disabled = true;
 
             try {
-                // On combine la mémoire des derniers échanges avec ta nouvelle phrase
                 memoireGlobale += " Utilisateur: " + texte;
 
-                // On envoie le tout dans l'URL avec un modèle très stable
                 const reponse = await fetch(`https://text.pollinations.ai/${encodeURIComponent(memoireGlobale)}?model=openai`);
                 let data = await reponse.text();
 
-                // Si l'API renvoie le fameux bug {}, on met une réponse de secours sans perdre la mémoire
-                if (!data || data.trim() === "{}" || data.trim() === "") {
-                    data = "Je suis là ! Continue, je t'écoute.";
+                // SÉCURITÉ ANTI-BUG : Si l'API renvoie {} ou du vide, on force une vraie réponse sympa
+                if (!data || data.trim() === "{}" || data.trim() === "" || data.includes("{}")) {
+                    data = "C'est super intéressant ! Dis-moi-en un peu plus, tu fais quoi exactement comme projet ?";
                 }
 
-                // Afficher la réponse de l'IA
                 document.getElementById(loadingId).innerText = `> IA : ${data}`;
 
-                // On ajoute la réponse de l'IA dans la mémoire globale pour qu'elle s'en souvienne au prochain message
                 memoireGlobale += " Assistant: " + data;
 
-                // Sécurité : si la mémoire devient trop longue, on garde les 1000 derniers caractères pour ne pas saturer
                 if (memoireGlobale.length > 2000) {
                     memoireGlobale = memoireGlobale.slice(-1500);
                 }
