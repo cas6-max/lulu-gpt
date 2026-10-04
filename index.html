@@ -6,6 +6,9 @@
     <title>Lulu GPT</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
             background: linear-gradient(135deg, #d0e1fd 0%, #b9d3ff 100%);
             color: #0f172a;
@@ -14,15 +17,13 @@
             padding: 15px;
             display: flex;
             flex-direction: column;
-            height: 92vh;
-            box-sizing: border-box;
+            height: 100vh;
         }
 
         h2 {
             font-size: 1.4rem;
             letter-spacing: 3px;
-            margin-top: 0;
-            margin-bottom: 12px;
+            margin: 0 0 10px 0;
             color: #1e3a8a;
             text-transform: uppercase;
             text-align: center;
@@ -34,7 +35,7 @@
             border: 2px solid rgba(74, 144, 226, 0.4);
             padding: 15px;
             margin-bottom: 15px;
-            background-color: rgba(255, 255, 255, 0.6);
+            background-color: rgba(255, 255, 255, 0.7);
             backdrop-filter: blur(10px);
             border-radius: 16px;
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
@@ -48,16 +49,10 @@
             padding: 12px 16px;
             font-size: 1.05rem;
             line-height: 1.5;
-            animation: fadeIn 0.3s ease-in-out;
             word-break: break-word;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Bulle utilisateur : à droite, bleue */
+        /* Bulle utilisateur : alignée à droite, bleue */
         .user {
             background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
             color: #ffffff;
@@ -66,7 +61,7 @@
             box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
         }
 
-        /* Bulle IA : à gauche, blanche */
+        /* Bulle IA : alignée à gauche, blanche */
         .bot {
             background-color: #ffffff;
             color: #0f172a;
@@ -91,7 +86,6 @@
             font-size: 1.05rem;
             border-radius: 14px;
             outline: none;
-            transition: all 0.3s ease;
         }
 
         input:focus {
@@ -109,13 +103,10 @@
             font-family: 'Share Tech Mono', monospace;
             font-size: 1.05rem;
             border-radius: 14px;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         }
 
         button:hover {
             background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-            transform: translateY(-1px);
         }
     </style>
 </head>
@@ -134,7 +125,6 @@
     <script>
         const inputField = document.getElementById("user-input");
         const sendBtn = document.getElementById("send-btn");
-
         let memoireGlobale = "Contexte de la discussion : ";
 
         inputField.addEventListener("keypress", function(event) {
@@ -149,13 +139,13 @@
 
             const chatContainer = document.getElementById("chat-container");
             
-            // Bulle utilisateur (alignée à droite)
+            // Bulle utilisateur
             chatContainer.innerHTML += `<div class="msg user">${texte}</div>`;
             inputField.value = "";
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
             const loadingId = "load-" + Date.now();
-            // Bulle d'attente (alignée à gauche)
+            // Bulle d'attente IA
             chatContainer.innerHTML += `<div class="msg bot" id="${loadingId}">Réflexion en cours...</div>`;
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
@@ -168,11 +158,10 @@
                 let data = await reponse.text();
 
                 if (!data || data.trim() === "{}" || data.trim() === "" || data.includes("{}")) {
-                    data = "C'est super intéressant ! Dis-moi-en un peu plus.";
+                    data = "C'est super intéressant ! Dis-moi-en plus.";
                 }
 
                 document.getElementById(loadingId).innerText = data;
-
                 memoireGlobale += " Assistant: " + data;
 
                 if (memoireGlobale.length > 2000) {
