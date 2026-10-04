@@ -3,76 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminal IA v0.1</title>
-    <style>
-        body {
-            /* Changement : Fond bleu clair */
-            background-color: #d0e1fd;
-            /* Changement : Écriture noire */
-            color: #000000;
-            font-family: 'Courier New', Courier, monospace;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            height: 90vh;
-        }
-        #chat-container {
-            flex: 1;
-            overflow-y: auto;
-            /* Bordure bleue plus foncée pour bien délimiter */
-            border: 2px solid #4a90e2;
-            padding: 15px;
-            margin-bottom: 10px;
-            /* Fond blanc/bleu très clair pour la zone de chat */
-            background-color: #f0f6ff;
-        }
-        .msg {
-            margin-bottom: 10px;
-            line-height: 1.4;
-        }
-        .user { color: #1a365d; font-weight: bold; }
-        .bot { color: #000000; }
-        #input-container {
-            display: flex;
-        }
-        input {
-            flex: 1;
-            background: #ffffff;
-            border: 2px solid #4a90e2;
-            color: #000000;
-            padding: 10px;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 16px;
-        }
-        button {
-            background: #4a90e2;
-            color: #ffffff;
-            border: none;
-            padding: 10px 20px;
-            font-weight: bold;
-            cursor: pointer;
-            font-family: 'Courier New', Courier, monospace;
-        }
-        button:hover {
-            background: #357abd;
-        }
-    </style>
+    <title>Lulu GPT</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
 </head>
 <body>
 
-    <h2>TERMINAL_IA // [PROTOTYPE]</h2>
+    <h2>Lulu GPT</h2>
     <div id="chat-container">
         <div class="msg bot">> Système initialisé. En attente de commande...</div>
     </div>
 
     <div id="input-container">
         <input type="text" id="user-input" placeholder="Tape ton message..." autofocus>
-        <button onclick="envoyer()">Envoyer</button>
+        <button onclick="envoyer()" id="send-btn">Envoyer</button>
     </div>
 
     <script>
         const inputField = document.getElementById("user-input");
+        const sendBtn = document.getElementById("send-btn");
+        
+        // Historique de conversation léger (on garde une base simple)
+        let historiqueChat = [
+            { role: "system", content: "Tu es un assistant virtuel concis et rapide." }
+        ];
+
         inputField.addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
                 envoyer();
@@ -85,27 +40,53 @@
 
             const chatContainer = document.getElementById("chat-container");
             
-            // Afficher le message de l'utilisateur
+            // Afficher ton message
             chatContainer.innerHTML += `<div class="msg user">> Toi : ${texte}</div>`;
             inputField.value = "";
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
+            // Ajouter à l'historique
+            historiqueChat.push({ role: "user", content: texte });
+
+            // SECURITÉ FLUIDITÉ : Si l'historique dépasse 7 messages, on efface les plus anciens 
+            // pour que l'IA ne ralentisse jamais.
+            if (historiqueChat.length > 7) {
+                // On garde la consigne système (index 0) et les 6 derniers messages
+                historiqueChat = [historiqueChat[0], ...historiqueChat.slice(-6)];
+            }
+
             // Message d'attente
             const loadingId = "load-" + Date.now();
-            chatContainer.innerHTML += `<div class="msg bot" id="${loadingId}">> Connexion au serveur neuronal...</div>`;
+            chatContainer.innerHTML += `<div class="msg bot" id="${loadingId}">> Réflexion en cours...</div>`;
             chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // Désactiver le bouton pendant qu'elle réfléchit pour éviter les doubles clics bloquants
+            sendBtn.disabled = true;
 
             try {
-                // Appel à l'API publique et gratuite
-                const reponse = await fetch(`https://text.pollinations.ai/${encodeURIComponent(texte)}`);
+                // Appel ultra-rapide à l'API avec un format allégé
+                const reponse = await fetch('https://text.pollinations.ai/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: historiqueChat,
+                        model: 'openai'
+                    })
+                });
+                
                 const data = await reponse.text();
 
-                // Remplacer le message d'attente par la réponse
                 document.getElementById(loadingId).innerText = `> IA : ${data}`;
+                historiqueChat.push({ role: "assistant", content: data });
+
             } catch (error) {
-                document.getElementById(loadingId).innerText = `> Erreur : Le réseau a lâché.`;
+                document.getElementById(loadingId).innerText = `> Erreur : Le serveur a mis trop de temps à répondre. Réessaie !`;
             }
+
+            // Réactiver le bouton
+            sendBtn.disabled = false;
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            inputField.focus();
         }
     </script>
 
