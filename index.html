@@ -23,10 +23,8 @@
         const inputField = document.getElementById("user-input");
         const sendBtn = document.getElementById("send-btn");
         
-        // Historique de conversation léger (on garde une base simple)
-        let historiqueChat = [
-            { role: "system", content: "Tu es un assistant virtuel concis et rapide." }
-        ];
+        // On garde un petit historique sous forme de texte simple
+        let memoireDiscussion = "Tu es un assistant amical nommé Lulu GPT. ";
 
         inputField.addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
@@ -45,45 +43,34 @@
             inputField.value = "";
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            // Ajouter à l'historique
-            historiqueChat.push({ role: "user", content: texte });
-
-            // SECURITÉ FLUIDITÉ : Si l'historique dépasse 7 messages, on efface les plus anciens 
-            // pour que l'IA ne ralentisse jamais.
-            if (historiqueChat.length > 7) {
-                // On garde la consigne système (index 0) et les 6 derniers messages
-                historiqueChat = [historiqueChat[0], ...historiqueChat.slice(-6)];
-            }
-
             // Message d'attente
             const loadingId = "load-" + Date.now();
             chatContainer.innerHTML += `<div class="msg bot" id="${loadingId}">> Réflexion en cours...</div>`;
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            // Désactiver le bouton pendant qu'elle réfléchit pour éviter les doubles clics bloquants
             sendBtn.disabled = true;
 
             try {
-                // Appel ultra-rapide à l'API avec un format allégé
-                const reponse = await fetch('https://text.pollinations.ai/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        messages: historiqueChat,
-                        model: 'openai'
-                    })
-                });
-                
+                // On envoie le contexte et la question directement dans l'URL (zéro bug de format !)
+                const promptComplet = memoireDiscussion + " Utilisateur: " + texte;
+                const reponse = await fetch(`https://text.pollinations.ai/${encodeURIComponent(promptComplet)}?model=openai`);
                 const data = await reponse.text();
 
+                // Afficher la réponse
                 document.getElementById(loadingId).innerText = `> IA : ${data}`;
-                historiqueChat.push({ role: "assistant", content: data });
+                
+                // Mettre à jour la mémoire pour la suite
+                memoireDiscussion += " Utilisateur: " + texte + " Assistant: " + data + " ";
+
+                // Sécurité pour pas que la mémoire devienne trop lourde
+                if (memoireDiscussion.length > 1500) {
+                    memoireDiscussion = memoireDiscussion.slice(-1000);
+                }
 
             } catch (error) {
-                document.getElementById(loadingId).innerText = `> Erreur : Le serveur a mis trop de temps à répondre. Réessaie !`;
+                document.getElementById(loadingId).innerText = `> Erreur : Le réseau a lâché.`;
             }
 
-            // Réactiver le bouton
             sendBtn.disabled = false;
             chatContainer.scrollTop = chatContainer.scrollHeight;
             inputField.focus();
