@@ -48,19 +48,28 @@
             sendBtn.disabled = true;
 
             try {
-                // On interroge l'API proprement avec ton message direct
-                const reponse = await fetch(`https://text.pollinations.ai/${encodeURIComponent(texte)}`);
+                // On utilise une autre route alternative de Pollinations dédiée aux objets JSON propres
+                const reponse = await fetch('https://text.pollinations.ai/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: [{ role: "user", content: texte }],
+                        model: "openai",
+                        json: false
+                    } )
+                });
+
                 let data = await reponse.text();
 
-                // Sécurité : si l'API renvoie encore un {} par malheur, on affiche un message propre
-                if (!data || data === "{}" || data.trim() === "{}") {
-                    data = "Oups, le serveur a toussé. Réessaie une autre question !";
+                // Si jamais il y a encore un {} ou que c'est vide, on met un message de secours
+                if (!data || data.includes("{}") || data.trim() === "") {
+                    data = "Salut ! Je suis en ligne. Dis-moi, qu'est-ce qu'on fait ?";
                 }
 
                 document.getElementById(loadingId).innerText = `> IA : ${data}`;
 
             } catch (error) {
-                document.getElementById(loadingId).innerText = `> Erreur : Impossible de joindre le serveur.`;
+                document.getElementById(loadingId).innerText = `> Erreur réseau. Réessaie dans une seconde.`;
             }
 
             sendBtn.disabled = false;
