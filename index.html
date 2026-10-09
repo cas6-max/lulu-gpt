@@ -1,182 +1,474 @@
 <!DOCTYPE html>
+
 <html lang="fr">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lulu GPT</title>
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-        body {
-            background: linear-gradient(135deg, #d0e1fd 0%, #b9d3ff 100%);
-            color: #0f172a;
-            font-family: 'Share Tech Mono', monospace;
-            margin: 0;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
 
-        h2 {
-            font-size: 1.4rem;
-            letter-spacing: 3px;
-            margin: 0 0 10px 0;
-            color: #1e3a8a;
-            text-transform: uppercase;
-            text-align: center;
-        }
+<meta charset="UTF-8">
 
-        #chat-container {
-            flex: 1;
-            overflow-y: auto;
-            border: 2px solid rgba(74, 144, 226, 0.4);
-            padding: 15px;
-            margin-bottom: 15px;
-            background-color: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-        .msg {
-            max-width: 80%;
-            padding: 12px 16px;
-            font-size: 1.05rem;
-            line-height: 1.5;
-            word-break: break-word;
-        }
+<title>Lulu GPT</title>
 
-        /* Bulle utilisateur : alignée à droite, bleue */
-        .user {
-            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-            color: #ffffff;
-            align-self: flex-end;
-            border-radius: 18px 18px 4px 18px;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
-        }
+<style>
 
-        /* Bulle IA : alignée à gauche, blanche */
-        .bot {
-            background-color: #ffffff;
-            color: #0f172a;
-            align-self: flex-start;
-            border-radius: 18px 18px 18px 4px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-            border: 1px solid rgba(203, 213, 225, 0.6);
-        }
+{ box-sizing: border-box; }
+body {
 
-        #input-container {
-            display: flex;
-            gap: 10px;
-        }
+margin: 0;
 
-        input {
-            flex: 1;
-            background: #ffffff;
-            border: 2px solid #cbd5e1;
-            color: #0f172a;
-            padding: 14px 16px;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 1.05rem;
-            border-radius: 14px;
-            outline: none;
-        }
+height: 100vh;
 
-        input:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
-        }
+display: flex;
 
-        button {
-            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-            color: #ffffff;
-            border: none;
-            padding: 0 24px;
-            font-weight: bold;
-            cursor: pointer;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 1.05rem;
-            border-radius: 14px;
-        }
+flex-direction: column;
 
-        button:hover {
-            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-        }
-    </style>
+font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+background: #e8eef9;
+
+color: #0f172a;
+
+}
+
+
+
+header {
+
+display: flex;
+
+align-items: center;
+
+gap: 12px;
+
+padding: 12px 16px;
+
+background: #ffffff;
+
+border-bottom: 1px solid #dbe3f0;
+
+}
+
+.avatar {
+
+width: 38px; height: 38px;
+
+border-radius: 50%;
+
+background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+
+color: #fff;
+
+display: flex; align-items: center; justify-content: center;
+
+font-weight: 700;
+
+flex-shrink: 0;
+
+}
+
+.title { font-weight: 700; font-size: 1.05rem; }
+
+.status { font-size: .8rem; color: #16a34a; }
+
+
+
+#chat {
+
+flex: 1;
+
+overflow-y: auto;
+
+padding: 16px;
+
+display: flex;
+
+flex-direction: column;
+
+gap: 10px;
+
+}
+
+
+
+.row { display: flex; align-items: flex-end; gap: 8px; }
+
+.row.user { justify-content: flex-end; }
+
+.row .avatar { width: 30px; height: 30px; font-size: .85rem; }
+
+
+
+.bubble {
+
+max-width: 75%;
+
+padding: 10px 14px;
+
+font-size: 1rem;
+
+line-height: 1.45;
+
+white-space: pre-wrap;
+
+word-break: break-word;
+
+}
+
+.row.user .bubble {
+
+background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+
+color: #fff;
+
+border-radius: 18px 18px 4px 18px;
+
+}
+
+.row.bot .bubble {
+
+background: #fff;
+
+color: #0f172a;
+
+border-radius: 18px 18px 18px 4px;
+
+box-shadow: 0 1px 3px rgba(0,0,0,.08);
+
+}
+
+.time {
+
+display: block;
+
+margin-top: 4px;
+
+font-size: .7rem;
+
+opacity: .6;
+
+text-align: right;
+
+}
+
+
+
+/* Indicateur "est en train d'écrire" */
+
+.typing { display: flex; gap: 4px; padding: 4px 2px; }
+
+.typing span {
+
+width: 8px; height: 8px;
+
+background: #94a3b8;
+
+border-radius: 50%;
+
+animation: blink 1.2s infinite;
+
+}
+
+.typing span:nth-child(2) { animation-delay: .2s; }
+
+.typing span:nth-child(3) { animation-delay: .4s; }
+
+@keyframes blink { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+
+
+
+form {
+
+display: flex;
+
+gap: 10px;
+
+padding: 12px 16px;
+
+background: #fff;
+
+border-top: 1px solid #dbe3f0;
+
+}
+
+input {
+
+flex: 1;
+
+padding: 12px 16px;
+
+font-size: 1rem;
+
+border: 1px solid #cbd5e1;
+
+border-radius: 24px;
+
+outline: none;
+
+font-family: inherit;
+
+}
+
+input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+
+button {
+
+width: 46px; height: 46px;
+
+border: none;
+
+border-radius: 50%;
+
+background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+
+color: #fff;
+
+font-size: 1.2rem;
+
+cursor: pointer;
+
+}
+
+button:disabled { opacity: .5; cursor: default; }
+
+</style>
+
 </head>
+
 <body>
 
-    <h2>Lulu GPT</h2>
-    <div id="chat-container">
-        <div class="msg bot">Système initialisé. En attente de commande...</div>
-    </div>
 
-    <div id="input-container">
-        <input type="text" id="user-input" placeholder="Tape ton message..." autofocus>
-        <button onclick="envoyer()" id="send-btn">Envoyer</button>
-    </div>
 
-    <script>
-        const inputField = document.getElementById("user-input");
-        const sendBtn = document.getElementById("send-btn");
-        
-        // Consigne stricte pour son identité
-        let memoireGlobale = "Règle absolue : Tu t'appelles exclusivement Lulu GPT. Tu n'es pas ChatGPT ni une IA d'OpenAI. Contexte de la discussion : ";
+<header>
 
-        inputField.addEventListener("keypress", function(event) {
-            if (event.key === "Enter") {
-                envoyer();
-            }
-        });
+<div class="avatar">L</div>
 
-        async function envoyer() {
-            const texte = inputField.value.trim();
-            if (!texte) return;
+<div>
 
-            const chatContainer = document.getElementById("chat-container");
-            
-            chatContainer.innerHTML += `<div class="msg user">${texte}</div>`;
-            inputField.value = "";
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+<div class="title">Lulu GPT</div>
 
-            const loadingId = "load-" + Date.now();
-            chatContainer.innerHTML += `<div class="msg bot" id="${loadingId}">Réflexion en cours...</div>`;
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+<div class="status">● en ligne</div>
 
-            sendBtn.disabled = true;
+</div>
 
-            try {
-                memoireGlobale += " Utilisateur: " + texte;
+</header>
 
-                const reponse = await fetch(`https://text.pollinations.ai/${encodeURIComponent(memoireGlobale)}?model=openai`);
-                let data = await reponse.text();
 
-                if (!data || data.trim() === "{}" || data.trim() === "" || data.includes("{}")) {
-                    data = "Je suis Lulu GPT ! Que puis-je faire pour toi ?";
-                }
 
-                document.getElementById(loadingId).innerText = data;
-                memoireGlobale += " Assistant: " + data;
+<div id="chat"></div>
 
-                if (memoireGlobale.length > 2000) {
-                    memoireGlobale = memoireGlobale.slice(-1500);
-                }
 
-            } catch (error) {
-                document.getElementById(loadingId).innerText = "Erreur réseau. Réessaie !";
-            }
 
-            sendBtn.disabled = false;
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            inputField.focus();
-        }
-    </script>
+<form id="form">
+
+<input type="text" id="input" placeholder="Écris un message…" autocomplete="off" autofocus>
+
+<button type="submit" id="send" aria-label="Envoyer">➤</button>
+
+</form>
+
+
+
+<script>
+
+const chat = document.getElementById("chat");
+
+const form = document.getElementById("form");
+
+const input = document.getElementById("input");
+
+const sendBtn = document.getElementById("send");
+
+
+
+// Historique envoyé à l'IA (la consigne système définit son identité)
+
+const historique = [
+
+{
+
+role: "system",
+
+content: "Tu t'appelles Lulu GPT. Tu es un assistant sympa, tu réponds en français de façon claire et concise. Tu n'es ni ChatGPT ni une IA d'OpenAI."
+
+}
+
+];
+
+
+
+function heure() {
+
+return new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+}
+
+
+
+// Ajoute une bulle (textContent = pas de risque d'injection HTML)
+
+function ajouterMessage(role, texte) {
+
+const row = document.createElement("div");
+
+row.className = "row " + role;
+
+
+
+if (role === "bot") {
+
+const av = document.createElement("div");
+
+av.className = "avatar";
+
+av.textContent = "L";
+
+row.appendChild(av);
+
+}
+
+
+
+const bubble = document.createElement("div");
+
+bubble.className = "bubble";
+
+bubble.textContent = texte;
+
+
+
+const t = document.createElement("span");
+
+t.className = "time";
+
+t.textContent = heure();
+
+bubble.appendChild(t);
+
+
+
+row.appendChild(bubble);
+
+chat.appendChild(row);
+
+chat.scrollTop = chat.scrollHeight;
+
+return row;
+
+}
+
+
+
+function ajouterFrappe() {
+
+const row = document.createElement("div");
+
+row.className = "row bot";
+
+row.innerHTML =
+
+'<div class="avatar">L</div>' +
+
+'<div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
+
+chat.appendChild(row);
+
+chat.scrollTop = chat.scrollHeight;
+
+return row;
+
+}
+
+
+
+async function demanderIA() {
+
+// On garde le système + les 20 derniers messages
+
+const messages = [historique[0], ...historique.slice(1).slice(-20)];
+
+
+
+const res = await fetch("https://text.pollinations.ai/openai", {
+
+method: "POST",
+
+headers: { "Content-Type": "application/json" },
+
+body: JSON.stringify({ model: "openai", messages })
+
+});
+
+if (!res.ok) throw new Error("HTTP " + res.status);
+
+const data = await res.json();
+
+return data.choices?.[0]?.message?.content?.trim() || "Je n'ai pas compris, peux-tu reformuler ?";
+
+}
+
+
+
+form.addEventListener("submit", async (e) => {
+
+e.preventDefault();
+
+const texte = input.value.trim();
+
+if (!texte) return;
+
+
+
+ajouterMessage("user", texte);
+
+historique.push({ role: "user", content: texte });
+
+input.value = "";
+
+sendBtn.disabled = true;
+
+
+
+const frappe = ajouterFrappe();
+
+
+
+try {
+
+const reponse = await demanderIA();
+
+frappe.remove();
+
+ajouterMessage("bot", reponse);
+
+historique.push({ role: "assistant", content: reponse });
+
+} catch (err) {
+
+frappe.remove();
+
+ajouterMessage("bot", "Erreur réseau, réessaie dans un instant !");
+
+historique.pop(); // on retire le message qui n'a pas eu de réponse
+
+}
+
+
+
+sendBtn.disabled = false;
+
+input.focus();
+
+});
+
+
+
+ajouterMessage("bot", "Salut ! Je suis Lulu GPT 👋 Comment puis-je t'aider ?");
+
+</script>
+
+
 
 </body>
-</html>
+
+</html> 
