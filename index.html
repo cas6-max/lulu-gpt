@@ -6,7 +6,7 @@
 <title>Lulu GPT</title>
 <style>
   * { box-sizing: border-box; }
-  html, body { overflow: hidden; }
+  html, body { overflow: hidden; overscroll-behavior: none; }
   body {
     margin: 0;
     position: fixed;
@@ -42,6 +42,7 @@
   .status { font-size: .8rem; color: #16a34a; }
 
   #chat {
+    position: relative;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -147,14 +148,13 @@
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("send");
 
-  // --- Clavier mobile : la page suit la zone réellement visible ---
+  // --- Clavier mobile : la page suit la zone visible, SANS faire défiler le chat ---
   function ajusterHauteur() {
     const vv = window.visualViewport;
     if (vv) {
       document.body.style.height = vv.height + "px";
       document.body.style.top = vv.offsetTop + "px";
     }
-    chat.scrollTop = chat.scrollHeight;
   }
   if (window.visualViewport) {
     visualViewport.addEventListener("resize", ajusterHauteur);
@@ -174,8 +174,8 @@
     return new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   }
 
-  // Ajoute une bulle (textContent = pas de risque d'injection HTML)
-  function ajouterMessage(role, texte) {
+  // defilement : "bas" (fin du chat) ou "debut" (début de ce message)
+  function ajouterMessage(role, texte, defilement = "bas") {
     const row = document.createElement("div");
     row.className = "row " + role;
 
@@ -197,7 +197,12 @@
 
     row.appendChild(bubble);
     chat.appendChild(row);
-    chat.scrollTop = chat.scrollHeight;
+
+    if (defilement === "debut") {
+      chat.scrollTop = Math.max(0, row.offsetTop - 12);
+    } else {
+      chat.scrollTop = chat.scrollHeight;
+    }
     return row;
   }
 
@@ -241,7 +246,8 @@
     try {
       const reponse = await demanderIA();
       frappe.remove();
-      ajouterMessage("bot", reponse);
+      // La réponse s'affiche depuis son début, pas depuis sa fin
+      ajouterMessage("bot", reponse, "debut");
       historique.push({ role: "assistant", content: reponse });
     } catch (err) {
       frappe.remove();
