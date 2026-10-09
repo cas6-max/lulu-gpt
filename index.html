@@ -42,17 +42,17 @@
   .title { font-weight: 700; font-size: 1.05rem; }
   .status { font-size: .8rem; color: #16a34a; }
 
-  #clear {
-    margin-left: auto;
-    padding: 8px 12px;
-    font-size: .85rem;
-    font-family: inherit;
-    color: #475569;
-    background: #f1f5f9;
+  .icon-btn {
+    width: 40px; height: 40px;
     border: 1px solid #dbe3f0;
-    border-radius: 16px;
+    border-radius: 12px;
+    background: #f1f5f9;
+    color: #1e293b;
+    font-size: 1.2rem;
     cursor: pointer;
+    flex-shrink: 0;
   }
+  #new-chat { margin-left: auto; }
 
   #chat {
     position: relative;
@@ -136,17 +136,96 @@
     cursor: pointer;
   }
   #send:disabled { opacity: .5; cursor: default; }
+
+  /* --- Panneau des discussions --- */
+  #overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, .45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s;
+    z-index: 10;
+  }
+  #overlay.open { opacity: 1; pointer-events: auto; }
+
+  #drawer {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: min(320px, 85vw);
+    background: #fff;
+    transform: translateX(-100%);
+    transition: transform .25s;
+    z-index: 11;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 4px 0 20px rgba(0,0,0,.15);
+  }
+  #drawer.open { transform: translateX(0); }
+
+  .drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid #dbe3f0;
+    font-weight: 700;
+  }
+  #drawer-new {
+    margin: 12px 16px 4px;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: #fff;
+    font-size: 1rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  #list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .item:hover { background: #f1f5f9; }
+  .item.active { background: #e0ebff; }
+  .item-text { flex: 1; min-width: 0; }
+  .item-title {
+    font-size: .95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .item-date { font-size: .75rem; color: #64748b; margin-top: 2px; }
+  .item-del {
+    border: none;
+    background: transparent;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+  }
+  .item-del:hover { background: #fee2e2; }
+  .vide { padding: 20px 12px; color: #64748b; font-size: .9rem; text-align: center; }
 </style>
 </head>
 <body>
 
 <header>
+  <button class="icon-btn" id="menu" type="button" aria-label="Mes discussions">☰</button>
   <div class="avatar">L</div>
   <div>
     <div class="title">Lulu GPT</div>
     <div class="status">● en ligne</div>
   </div>
-  <button id="clear" type="button">🗑 Effacer</button>
+  <button class="icon-btn" id="new-chat" type="button" aria-label="Nouvelle discussion">＋</button>
 </header>
 
 <div id="chat"></div>
@@ -156,15 +235,28 @@
   <button type="submit" id="send" aria-label="Envoyer">➤</button>
 </form>
 
+<div id="overlay"></div>
+<aside id="drawer">
+  <div class="drawer-head">
+    <span>Mes discussions</span>
+    <button class="icon-btn" id="close" type="button" aria-label="Fermer">✕</button>
+  </div>
+  <button id="drawer-new" type="button">＋ Nouvelle discussion</button>
+  <div id="list"></div>
+</aside>
+
 <script>
   const chat = document.getElementById("chat");
   const form = document.getElementById("form");
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("send");
-  const clearBtn = document.getElementById("clear");
+  const drawer = document.getElementById("drawer");
+  const overlay = document.getElementById("overlay");
+  const list = document.getElementById("list");
 
   const SYSTEME = "Tu t'appelles Lulu GPT. Tu es un assistant sympa, tu réponds en français de façon claire et concise. Tu n'es ni ChatGPT ni une IA d'OpenAI.";
-  const CLE = "lulugpt_conversation";
+  const CLE = "lulugpt_chats_v2";
+  const ANCIENNE_CLE = "lulugpt_conversation"; // ancienne version (une seule discussion)
   const BIENVENUE = "Salut ! Je suis Lulu GPT 👋 Comment puis-je t'aider ?";
 
   // --- Clavier mobile : la page suit la zone visible, SANS faire défiler le chat ---
@@ -181,33 +273,76 @@
   }
   input.addEventListener("focus", () => setTimeout(ajusterHauteur, 300));
 
-  // --- Sauvegarde dans le navigateur de chaque visiteur ---
-  // conversation = [{ role: "user" | "assistant", content: "...", ts: 1234567890 }]
-  let conversation = [];
+  // --- Données : plusieurs discussions sauvegardées sur cet appareil ---
+  // chats = [{ id, titre, ts, messages: [{ role, content, ts }] }]
+  let chats = [];
+  let courant = null;
+  let enCours = false;
+
+  function nouveauChat() {
+    return {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      titre: "Nouvelle discussion",
+      ts: Date.now(),
+      messages: []
+    };
+  }
 
   function charger() {
+    let currentId = null;
     try {
       const brut = localStorage.getItem(CLE);
-      const data = brut ? JSON.parse(brut) : [];
-      return Array.isArray(data) ? data : [];
+      if (brut) {
+        const data = JSON.parse(brut);
+        if (Array.isArray(data.chats)) chats = data.chats;
+        currentId = data.current;
+      } else {
+        // Récupère l'ancienne discussion unique si elle existe
+        const ancien = JSON.parse(localStorage.getItem(ANCIENNE_CLE) || "[]");
+        if (Array.isArray(ancien) && ancien.length) {
+          const c = nouveauChat();
+          c.messages = ancien;
+          const premier = ancien.find(m => m.role === "user");
+          c.titre = premier ? titreDepuis(premier.content) : "Ancienne discussion";
+          c.ts = ancien[ancien.length - 1].ts || Date.now();
+          chats = [c];
+        }
+      }
     } catch (e) {
-      return [];
+      chats = [];
     }
+    courant = chats.find(c => c.id === currentId) || nouveauChat();
   }
 
   function sauvegarder() {
     try {
-      conversation = conversation.slice(-100); // on garde les 100 derniers messages
-      localStorage.setItem(CLE, JSON.stringify(conversation));
+      if (courant.messages.length && !chats.includes(courant)) chats.push(courant);
+      chats.forEach(c => { c.messages = c.messages.slice(-100); });
+      chats.sort((a, b) => a.ts - b.ts);
+      chats = chats.slice(-50); // on garde les 50 dernières discussions
+      localStorage.setItem(CLE, JSON.stringify({ chats, current: courant.id }));
     } catch (e) {
       // navigation privée ou stockage plein : on continue sans sauvegarder
     }
+  }
+
+  function titreDepuis(texte) {
+    const t = texte.replace(/\s+/g, " ").trim();
+    return t.length > 40 ? t.slice(0, 40) + "…" : t;
   }
 
   function heure(ts) {
     return new Date(ts || Date.now()).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   }
 
+  function dateCourte(ts) {
+    const d = new Date(ts);
+    const auj = new Date();
+    if (d.toDateString() === auj.toDateString()) return "Aujourd'hui, " + heure(ts);
+    return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + ", " + heure(ts);
+  }
+
+  // --- Affichage des messages ---
   // defilement : "bas" (fin du chat) ou "debut" (début de ce message)
   function ajouterMessage(role, texte, defilement = "bas", ts) {
     const row = document.createElement("div");
@@ -251,21 +386,111 @@
     return row;
   }
 
-  // Affiche le message d'accueil puis tout l'historique sauvegardé
   function afficherConversation() {
     chat.innerHTML = "";
     ajouterMessage("bot", BIENVENUE);
-    conversation.forEach(m => {
+    courant.messages.forEach(m => {
       ajouterMessage(m.role === "user" ? "user" : "bot", m.content, "bas", m.ts);
     });
     chat.scrollTop = chat.scrollHeight;
   }
 
-  async function demanderIA() {
-    // Consigne système + les 20 derniers messages
+  // --- Panneau des discussions ---
+  function ouvrirPanneau() {
+    afficherListe();
+    drawer.classList.add("open");
+    overlay.classList.add("open");
+  }
+  function fermerPanneau() {
+    drawer.classList.remove("open");
+    overlay.classList.remove("open");
+  }
+
+  function afficherListe() {
+    list.innerHTML = "";
+    const triees = [...chats].sort((a, b) => b.ts - a.ts);
+
+    if (!triees.length) {
+      const v = document.createElement("div");
+      v.className = "vide";
+      v.textContent = "Aucune discussion pour l'instant.";
+      list.appendChild(v);
+      return;
+    }
+
+    triees.forEach(c => {
+      const item = document.createElement("div");
+      item.className = "item" + (c.id === courant.id ? " active" : "");
+
+      const texte = document.createElement("div");
+      texte.className = "item-text";
+      const titre = document.createElement("div");
+      titre.className = "item-title";
+      titre.textContent = c.titre;
+      const date = document.createElement("div");
+      date.className = "item-date";
+      date.textContent = dateCourte(c.ts);
+      texte.appendChild(titre);
+      texte.appendChild(date);
+
+      const del = document.createElement("button");
+      del.className = "item-del";
+      del.type = "button";
+      del.textContent = "🗑";
+      del.setAttribute("aria-label", "Supprimer cette discussion");
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        supprimerChat(c.id);
+      });
+
+      item.appendChild(texte);
+      item.appendChild(del);
+      item.addEventListener("click", () => ouvrirChat(c.id));
+      list.appendChild(item);
+    });
+  }
+
+  function ouvrirChat(id) {
+    const c = chats.find(x => x.id === id);
+    if (!c) return;
+    courant = c;
+    sauvegarder();
+    afficherConversation();
+    fermerPanneau();
+  }
+
+  function creerNouveauChat() {
+    // Si la discussion actuelle est déjà vide, inutile d'en créer une autre
+    if (!courant.messages.length) { fermerPanneau(); input.focus(); return; }
+    courant = nouveauChat();
+    sauvegarder();
+    afficherConversation();
+    fermerPanneau();
+    input.focus();
+  }
+
+  function supprimerChat(id) {
+    if (!confirm("Supprimer cette discussion ?")) return;
+    chats = chats.filter(c => c.id !== id);
+    if (courant.id === id) {
+      courant = nouveauChat();
+      afficherConversation();
+    }
+    sauvegarder();
+    afficherListe();
+  }
+
+  document.getElementById("menu").addEventListener("click", ouvrirPanneau);
+  document.getElementById("close").addEventListener("click", fermerPanneau);
+  overlay.addEventListener("click", fermerPanneau);
+  document.getElementById("new-chat").addEventListener("click", creerNouveauChat);
+  document.getElementById("drawer-new").addEventListener("click", creerNouveauChat);
+
+  // --- Appel à l'IA ---
+  async function demanderIA(discussion) {
     const messages = [
       { role: "system", content: SYSTEME },
-      ...conversation.slice(-20).map(m => ({ role: m.role, content: m.content }))
+      ...discussion.messages.slice(-20).map(m => ({ role: m.role, content: m.content }))
     ];
 
     const res = await fetch("https://text.pollinations.ai/openai", {
@@ -281,45 +506,45 @@
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const texte = input.value.trim();
-    if (!texte) return;
+    if (!texte || enCours) return;
 
+    const discussion = courant; // on garde la discussion d'origine
     const ts = Date.now();
-    ajouterMessage("user", texte, "bas", ts);
-    conversation.push({ role: "user", content: texte, ts });
-    sauvegarder();
-    input.value = "";
-    sendBtn.disabled = true;
 
+    if (!discussion.messages.length) discussion.titre = titreDepuis(texte);
+    discussion.messages.push({ role: "user", content: texte, ts });
+    discussion.ts = ts;
+    sauvegarder();
+    ajouterMessage("user", texte, "bas", ts);
+
+    input.value = "";
+    enCours = true;
+    sendBtn.disabled = true;
     const frappe = ajouterFrappe();
 
     try {
-      const reponse = await demanderIA();
+      const reponse = await demanderIA(discussion);
       frappe.remove();
       const tsRep = Date.now();
-      // La réponse s'affiche depuis son début, pas depuis sa fin
-      ajouterMessage("bot", reponse, "debut", tsRep);
-      conversation.push({ role: "assistant", content: reponse, ts: tsRep });
+      discussion.messages.push({ role: "assistant", content: reponse, ts: tsRep });
+      discussion.ts = tsRep;
       sauvegarder();
+      // On n'affiche la réponse que si on est toujours dans cette discussion
+      if (courant === discussion) ajouterMessage("bot", reponse, "debut", tsRep);
     } catch (err) {
       frappe.remove();
-      ajouterMessage("bot", "Erreur réseau, réessaie dans un instant !");
-      conversation.pop(); // on retire le message qui n'a pas eu de réponse
+      discussion.messages.pop(); // on retire le message qui n'a pas eu de réponse
       sauvegarder();
+      if (courant === discussion) ajouterMessage("bot", "Erreur réseau, réessaie dans un instant !");
     }
 
+    enCours = false;
     sendBtn.disabled = false;
     input.focus();
   });
 
-  clearBtn.addEventListener("click", () => {
-    if (!confirm("Effacer toute la discussion ?")) return;
-    conversation = [];
-    sauvegarder();
-    afficherConversation();
-  });
-
-  // Démarrage : on recharge la discussion de cette personne
-  conversation = charger();
+  // Démarrage
+  charger();
   afficherConversation();
   ajusterHauteur();
 </script>
