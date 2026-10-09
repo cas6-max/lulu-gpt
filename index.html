@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
 <title>Lulu GPT</title>
+<meta name="description" content="Lulu GPT, ton assistant IA gratuit : pose tes questions et discute en direct.">
 <style>
   * { box-sizing: border-box; }
   html, body { overflow: hidden; overscroll-behavior: none; }
@@ -40,6 +41,18 @@
   }
   .title { font-weight: 700; font-size: 1.05rem; }
   .status { font-size: .8rem; color: #16a34a; }
+
+  #clear {
+    margin-left: auto;
+    padding: 8px 12px;
+    font-size: .85rem;
+    font-family: inherit;
+    color: #475569;
+    background: #f1f5f9;
+    border: 1px solid #dbe3f0;
+    border-radius: 16px;
+    cursor: pointer;
+  }
 
   #chat {
     position: relative;
@@ -113,7 +126,7 @@
     font-family: inherit;
   }
   input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
-  button {
+  #send {
     width: 46px; height: 46px;
     border: none;
     border-radius: 50%;
@@ -122,7 +135,7 @@
     font-size: 1.2rem;
     cursor: pointer;
   }
-  button:disabled { opacity: .5; cursor: default; }
+  #send:disabled { opacity: .5; cursor: default; }
 </style>
 </head>
 <body>
@@ -133,6 +146,7 @@
     <div class="title">Lulu GPT</div>
     <div class="status">● en ligne</div>
   </div>
+  <button id="clear" type="button">🗑 Effacer</button>
 </header>
 
 <div id="chat"></div>
@@ -147,6 +161,11 @@
   const form = document.getElementById("form");
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("send");
+  const clearBtn = document.getElementById("clear");
+
+  const SYSTEME = "Tu t'appelles Lulu GPT. Tu es un assistant sympa, tu réponds en français de façon claire et concise. Tu n'es ni ChatGPT ni une IA d'OpenAI.";
+  const CLE = "lulugpt_conversation";
+  const BIENVENUE = "Salut ! Je suis Lulu GPT 👋 Comment puis-je t'aider ?";
 
   // --- Clavier mobile : la page suit la zone visible, SANS faire défiler le chat ---
   function ajusterHauteur() {
@@ -162,20 +181,35 @@
   }
   input.addEventListener("focus", () => setTimeout(ajusterHauteur, 300));
 
-  // Historique envoyé à l'IA (la consigne système définit son identité)
-  const historique = [
-    {
-      role: "system",
-      content: "Tu t'appelles Lulu GPT. Tu es un assistant sympa, tu réponds en français de façon claire et concise. Tu n'es ni ChatGPT ni une IA d'OpenAI."
-    }
-  ];
+  // --- Sauvegarde dans le navigateur de chaque visiteur ---
+  // conversation = [{ role: "user" | "assistant", content: "...", ts: 1234567890 }]
+  let conversation = [];
 
-  function heure() {
-    return new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  function charger() {
+    try {
+      const brut = localStorage.getItem(CLE);
+      const data = brut ? JSON.parse(brut) : [];
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function sauvegarder() {
+    try {
+      conversation = conversation.slice(-100); // on garde les 100 derniers messages
+      localStorage.setItem(CLE, JSON.stringify(conversation));
+    } catch (e) {
+      // navigation privée ou stockage plein : on continue sans sauvegarder
+    }
+  }
+
+  function heure(ts) {
+    return new Date(ts || Date.now()).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   }
 
   // defilement : "bas" (fin du chat) ou "debut" (début de ce message)
-  function ajouterMessage(role, texte, defilement = "bas") {
+  function ajouterMessage(role, texte, defilement = "bas", ts) {
     const row = document.createElement("div");
     row.className = "row " + role;
 
@@ -192,7 +226,7 @@
 
     const t = document.createElement("span");
     t.className = "time";
-    t.textContent = heure();
+    t.textContent = heure(ts);
     bubble.appendChild(t);
 
     row.appendChild(bubble);
@@ -217,9 +251,22 @@
     return row;
   }
 
+  // Affiche le message d'accueil puis tout l'historique sauvegardé
+  function afficherConversation() {
+    chat.innerHTML = "";
+    ajouterMessage("bot", BIENVENUE);
+    conversation.forEach(m => {
+      ajouterMessage(m.role === "user" ? "user" : "bot", m.content, "bas", m.ts);
+    });
+    chat.scrollTop = chat.scrollHeight;
+  }
+
   async function demanderIA() {
-    // On garde le système + les 20 derniers messages
-    const messages = [historique[0], ...historique.slice(1).slice(-20)];
+    // Consigne système + les 20 derniers messages
+    const messages = [
+      { role: "system", content: SYSTEME },
+      ...conversation.slice(-20).map(m => ({ role: m.role, content: m.content }))
+    ];
 
     const res = await fetch("https://text.pollinations.ai/openai", {
       method: "POST",
@@ -236,8 +283,10 @@
     const texte = input.value.trim();
     if (!texte) return;
 
-    ajouterMessage("user", texte);
-    historique.push({ role: "user", content: texte });
+    const ts = Date.now();
+    ajouterMessage("user", texte, "bas", ts);
+    conversation.push({ role: "user", content: texte, ts });
+    sauvegarder();
     input.value = "";
     sendBtn.disabled = true;
 
@@ -246,20 +295,32 @@
     try {
       const reponse = await demanderIA();
       frappe.remove();
+      const tsRep = Date.now();
       // La réponse s'affiche depuis son début, pas depuis sa fin
-      ajouterMessage("bot", reponse, "debut");
-      historique.push({ role: "assistant", content: reponse });
+      ajouterMessage("bot", reponse, "debut", tsRep);
+      conversation.push({ role: "assistant", content: reponse, ts: tsRep });
+      sauvegarder();
     } catch (err) {
       frappe.remove();
       ajouterMessage("bot", "Erreur réseau, réessaie dans un instant !");
-      historique.pop(); // on retire le message qui n'a pas eu de réponse
+      conversation.pop(); // on retire le message qui n'a pas eu de réponse
+      sauvegarder();
     }
 
     sendBtn.disabled = false;
     input.focus();
   });
 
-  ajouterMessage("bot", "Salut ! Je suis Lulu GPT 👋 Comment puis-je t'aider ?");
+  clearBtn.addEventListener("click", () => {
+    if (!confirm("Effacer toute la discussion ?")) return;
+    conversation = [];
+    sauvegarder();
+    afficherConversation();
+  });
+
+  // Démarrage : on recharge la discussion de cette personne
+  conversation = charger();
+  afficherConversation();
   ajusterHauteur();
 </script>
 
