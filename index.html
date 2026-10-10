@@ -170,6 +170,30 @@
     border-bottom: 1px solid #dbe3f0;
     font-weight: 700;
   }
+
+  /* --- Compte --- */
+  #compte {
+    padding: 12px 16px;
+    border-bottom: 1px solid #dbe3f0;
+    background: #f8fafc;
+    font-size: .9rem;
+  }
+  #compte .nom { font-weight: 700; }
+  #compte .mail { color: #64748b; font-size: .8rem; word-break: break-all; margin-bottom: 8px; }
+  #compte .note { color: #64748b; font-size: .78rem; margin-top: 8px; line-height: 1.35; }
+  .btn-compte {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    background: #fff;
+    color: #0f172a;
+    font-size: .95rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .btn-compte:hover { background: #f1f5f9; }
+
   #drawer-new {
     margin: 12px 16px 4px;
     padding: 12px;
@@ -241,11 +265,35 @@
     <span>Mes discussions</span>
     <button class="icon-btn" id="close" type="button" aria-label="Fermer">✕</button>
   </div>
+  <div id="compte"></div>
   <button id="drawer-new" type="button">＋ Nouvelle discussion</button>
   <div id="list"></div>
 </aside>
 
-<script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+  import {
+    getAuth, onAuthStateChanged, GoogleAuthProvider,
+    signInWithPopup, signInWithRedirect, signOut
+  } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
+  import {
+    getFirestore, collection, doc, getDocs, setDoc, deleteDoc
+  } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+
+  // --- Firebase (ces réglages ne sont pas secrets : la sécurité vient des règles Firestore) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyCgSZvNm4xYWWdFHWW44d5nCGXJwst9ljg",
+    authDomain: "lulu-gpt.firebaseapp.com",
+    projectId: "lulu-gpt",
+    storageBucket: "lulu-gpt.firebasestorage.app",
+    messagingSenderId: "614413455210",
+    appId: "1:614413455210:web:7b687ab2dcfff88638df13",
+    measurementId: "G-W4E58WVCYZ"
+  };
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
   const chat = document.getElementById("chat");
   const form = document.getElementById("form");
   const input = document.getElementById("input");
@@ -253,9 +301,11 @@
   const drawer = document.getElementById("drawer");
   const overlay = document.getElementById("overlay");
   const list = document.getElementById("list");
+  const compte = document.getElementById("compte");
 
   const SYSTEME = "Tu t'appelles Lulu GPT. Tu es un assistant sympa, tu réponds en français de façon claire et concise. Tu n'es ni ChatGPT ni une IA d'OpenAI.";
   const CLE = "lulugpt_chats_v2";
+  const CLE_COURANT = "lulugpt_courant_compte";
   const ANCIENNE_CLE = "lulugpt_conversation"; // ancienne version (une seule discussion)
   const BIENVENUE = "Salut ! Je suis Lulu GPT 👋 Comment puis-je t'aider ?";
 
@@ -278,11 +328,13 @@
   }
   input.addEventListener("focus", () => setTimeout(ajusterHauteur, 300));
 
-  // --- Données : plusieurs discussions sauvegardées sur cet appareil ---
+  // --- Données ---
   // chats = [{ id, titre, ts, messages: [{ role, content, ts }] }]
+  // Sans compte : sauvegardé sur l'appareil. Avec compte : sauvegardé en ligne (Firestore).
   let chats = [];
   let courant = null;
   let enCours = false;
+  let user = null;
 
   function nouveauChat() {
     return {
@@ -291,6 +343,14 @@
       ts: Date.now(),
       messages: []
     };
+  }
+
+  function lireLocal() {
+    try {
+      const d = JSON.parse(localStorage.getItem(CLE) || "null");
+      if (d && Array.isArray(d.chats)) return d;
+    } catch (e) {}
+    return { chats: [], current: null };
   }
 
   function charger() {
@@ -319,15 +379,39 @@
     courant = chats.find(c => c.id === currentId) || nouveauChat();
   }
 
-  function sauvegarder() {
+  function sauvegarderCloud(c) {
+    if (!user || !c.messages.length) return;
+    c.messages = c.messages.slice(-100);
+    setDoc(doc(db, "users", user.uid, "chats", c.id), {
+      titre: c.titre, ts: c.ts, messages: c.messages
+    }).catch(e => console.warn("Sauvegarde en ligne impossible :", e.message));
+  }
+
+  // Enregistre la discussion c (par défaut la courante)
+  function sauvegarder(c = courant) {
+    if (c.messages.length && !chats.includes(c)) chats.push(c);
+
+    if (user) {
+      sauvegarderCloud(c);
+      try { localStorage.setItem(CLE_COURANT, courant.id); } catch (e) {}
+      return;
+    }
     try {
-      if (courant.messages.length && !chats.includes(courant)) chats.push(courant);
-      chats.forEach(c => { c.messages = c.messages.slice(-100); });
+      chats.forEach(x => { x.messages = x.messages.slice(-100); });
       chats.sort((a, b) => a.ts - b.ts);
       chats = chats.slice(-50); // on garde les 50 dernières discussions
       localStorage.setItem(CLE, JSON.stringify({ chats, current: courant.id }));
     } catch (e) {
       // navigation privée ou stockage plein : on continue sans sauvegarder
+    }
+  }
+
+  // Mémorise seulement quelle discussion est ouverte
+  function memoriserCourant() {
+    if (user) {
+      try { localStorage.setItem(CLE_COURANT, courant.id); } catch (e) {}
+    } else {
+      sauvegarder();
     }
   }
 
@@ -400,11 +484,141 @@
     chat.scrollTop = chat.scrollHeight;
   }
 
+  // --- Compte (connexion Google) ---
+  function afficherCompte() {
+    compte.innerHTML = "";
+
+    if (user) {
+      const nom = document.createElement("div");
+      nom.className = "nom";
+      nom.textContent = user.displayName || "Connecté";
+      const mail = document.createElement("div");
+      mail.className = "mail";
+      mail.textContent = user.email || "";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-compte";
+      btn.textContent = "Se déconnecter";
+      btn.addEventListener("click", () => signOut(auth));
+      const note = document.createElement("div");
+      note.className = "note";
+      note.textContent = "Tes discussions sont enregistrées en ligne sur ton compte et disponibles sur tous tes appareils.";
+      compte.append(nom, mail, btn, note);
+    } else {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-compte";
+      btn.textContent = "Se connecter avec Google";
+      btn.addEventListener("click", seConnecter);
+      const note = document.createElement("div");
+      note.className = "note";
+      note.textContent = "Connecte-toi pour retrouver tes discussions sur tous tes appareils. Connecté, tes messages sont enregistrés en ligne. Sinon, ils restent seulement sur cet appareil.";
+      compte.append(btn, note);
+    }
+  }
+
+  async function seConnecter() {
+    const fournisseur = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, fournisseur);
+    } catch (e) {
+      if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment"].includes(e.code)) {
+        await signInWithRedirect(auth, fournisseur);
+      } else if (!["auth/popup-closed-by-user", "auth/cancelled-popup-request"].includes(e.code)) {
+        alert("Connexion impossible : " + (e.code || e.message));
+      }
+    }
+  }
+
+  async function lireCloud(u) {
+    const snap = await getDocs(collection(db, "users", u.uid, "chats"));
+    return snap.docs.map(d => {
+      const c = { id: d.id, ...d.data() };
+      c.messages = Array.isArray(c.messages) ? c.messages : [];
+      c.titre = c.titre || "Discussion";
+      c.ts = c.ts || Date.now();
+      return c;
+    });
+  }
+
+  // À la connexion : on charge le compte et on y transfère les discussions de cet appareil
+  async function connecterCloud(u) {
+    try {
+      const cloud = await lireCloud(u);
+      const ids = new Set(cloud.map(c => c.id));
+      const local = lireLocal();
+      let toutOk = true;
+
+      for (const l of local.chats) {
+        if (l.messages && l.messages.length && !ids.has(l.id)) {
+          try {
+            await setDoc(doc(db, "users", u.uid, "chats", l.id), {
+              titre: l.titre, ts: l.ts, messages: l.messages
+            });
+            cloud.push(l);
+          } catch (e) {
+            toutOk = false;
+            console.warn("Transfert impossible :", e.message);
+          }
+        }
+      }
+      // Les discussions locales sont maintenant sur le compte : on les retire de l'appareil
+      if (toutOk) { try { localStorage.removeItem(CLE); } catch (e) {} }
+
+      let idSauve = null;
+      try { idSauve = localStorage.getItem(CLE_COURANT); } catch (e) {}
+      const idActuel = courant.id;
+
+      chats = cloud;
+      courant = chats.find(c => c.id === idActuel)
+             || chats.find(c => c.id === idSauve)
+             || nouveauChat();
+      afficherConversation();
+    } catch (e) {
+      console.warn(e);
+      alert("Impossible de charger ton historique en ligne. Vérifie les règles Firestore (voir le guide).");
+    }
+  }
+
+  async function rafraichirCloud() {
+    if (!user || enCours) return;
+    try {
+      const cloud = await lireCloud(user);
+      const actuel = courant;
+      chats = cloud;
+      const trouve = chats.find(c => c.id === actuel.id);
+      if (trouve) courant = trouve;
+      else if (actuel.messages.length) chats.push(actuel);
+    } catch (e) {
+      console.warn("Actualisation impossible :", e.message);
+    }
+  }
+
+  onAuthStateChanged(auth, async (u) => {
+    const avant = user;
+    user = u;
+    if (u) {
+      await connecterCloud(u);
+    } else if (avant) {
+      // Déconnexion : on repart d'un écran vide, les discussions restent sur le compte
+      chats = [];
+      courant = nouveauChat();
+      afficherConversation();
+    }
+    afficherCompte();
+    afficherListe();
+  });
+
   // --- Panneau des discussions ---
-  function ouvrirPanneau() {
+  async function ouvrirPanneau() {
+    afficherCompte();
     afficherListe();
     drawer.classList.add("open");
     overlay.classList.add("open");
+    if (user) {
+      await rafraichirCloud();
+      afficherListe();
+    }
   }
   function fermerPanneau() {
     drawer.classList.remove("open");
@@ -459,7 +673,7 @@
     const c = chats.find(x => x.id === id);
     if (!c) return;
     courant = c;
-    sauvegarder();
+    memoriserCourant();
     afficherConversation();
     fermerPanneau();
   }
@@ -468,7 +682,7 @@
     // Si la discussion actuelle est déjà vide, inutile d'en créer une autre
     if (!courant.messages.length) { fermerPanneau(); input.focus(); return; }
     courant = nouveauChat();
-    sauvegarder();
+    memoriserCourant();
     afficherConversation();
     fermerPanneau();
     input.focus();
@@ -477,11 +691,15 @@
   function supprimerChat(id) {
     if (!confirm("Supprimer cette discussion ?")) return;
     chats = chats.filter(c => c.id !== id);
+    if (user) {
+      deleteDoc(doc(db, "users", user.uid, "chats", id))
+        .catch(e => console.warn("Suppression en ligne impossible :", e.message));
+    }
     if (courant.id === id) {
       courant = nouveauChat();
       afficherConversation();
     }
-    sauvegarder();
+    if (!user) sauvegarder();
     afficherListe();
   }
 
@@ -568,7 +786,7 @@
     if (!discussion.messages.length) discussion.titre = titreDepuis(texte);
     discussion.messages.push({ role: "user", content: texte, ts });
     discussion.ts = ts;
-    sauvegarder();
+    sauvegarder(discussion);
     ajouterMessage("user", texte, "bas", ts);
 
     input.value = "";
@@ -582,13 +800,13 @@
       const tsRep = Date.now();
       discussion.messages.push({ role: "assistant", content: reponse, ts: tsRep });
       discussion.ts = tsRep;
-      sauvegarder();
+      sauvegarder(discussion);
       // On n'affiche la réponse que si on est toujours dans cette discussion
       if (courant === discussion) ajouterMessage("bot", reponse, "debut", tsRep);
     } catch (err) {
       frappe.remove();
       discussion.messages.pop(); // on retire le message qui n'a pas eu de réponse
-      sauvegarder();
+      sauvegarder(discussion);
       if (courant === discussion) ajouterMessage("bot", "Erreur réseau, réessaie dans un instant !");
     }
 
@@ -597,9 +815,10 @@
     input.focus();
   });
 
-  // Démarrage
+  // Démarrage (Firebase préviendra ensuite si quelqu'un est déjà connecté)
   charger();
   afficherConversation();
+  afficherCompte();
   ajusterHauteur();
 </script>
 
