@@ -259,6 +259,11 @@
   const ANCIENNE_CLE = "lulugpt_conversation"; // ancienne version (une seule discussion)
   const BIENVENUE = "Salut ! Je suis Lulu GPT 👋 Comment puis-je t'aider ?";
 
+  // =====================================================
+  //  Adresse de ton relais Cloudflare (aucune clé ici)
+  // =====================================================
+  const WORKER_URL = "COLLE_L_ADRESSE_DU_WORKER_ICI";
+
   // --- Clavier mobile : la page suit la zone visible, SANS faire défiler le chat ---
   function ajusterHauteur() {
     const vv = window.visualViewport;
@@ -486,21 +491,70 @@
   document.getElementById("new-chat").addEventListener("click", creerNouveauChat);
   document.getElementById("drawer-new").addEventListener("click", creerNouveauChat);
 
-  // --- Appel à l'IA ---
-  async function demanderIA(discussion) {
-    const messages = [
-      { role: "system", content: SYSTEME },
-      ...discussion.messages.slice(-20).map(m => ({ role: m.role, content: m.content }))
-    ];
+  // --- IA : Gemini via ton relais en premier, Pollinations en secours ---
+  async function appelerRelais(messagesConversation) {
+    const ctrl = new AbortController();
+    const minuteur = setTimeout(() => ctrl.abort(), 25000);
+    try {
+      const res = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: messagesConversation }),
+        signal: ctrl.signal
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (!data.text) throw new Error("réponse vide");
+      return data.text;
+    } finally {
+      clearTimeout(minuteur);
+    }
+  }
 
-    const res = await fetch("https://text.pollinations.ai/openai", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "openai", messages })
-    });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() || "Je n'ai pas compris, peux-tu reformuler ?";
+  async function appelerPollinations(model, messages) {
+    const ctrl = new AbortController();
+    const minuteur = setTimeout(() => ctrl.abort(), 25000);
+    try {
+      const res = await fetch("https://text.pollinations.ai/openai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages }),
+        signal: ctrl.signal
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const texte = data.choices?.[0]?.message?.content?.trim();
+      if (!texte) throw new Error("réponse vide");
+      return texte;
+    } finally {
+      clearTimeout(minuteur);
+    }
+  }
+
+  async function demanderIA(discussion) {
+    const recents = discussion.messages
+      .slice(-20)
+      .map(m => ({ role: m.role, content: m.content }));
+
+    // 1) Gemini, via ton relais (la clé reste cachée côté relais)
+    if (WORKER_URL.startsWith("http")) {
+      try {
+        return await appelerRelais(recents);
+      } catch (e) {
+        console.warn("Relais Gemini indisponible :", e.message); // limite atteinte, panne…
+      }
+    }
+
+    // 2) Secours gratuit sans clé
+    const avecSysteme = [{ role: "system", content: SYSTEME }, ...recents];
+    for (const model of ["openai", "mistral", "llama"]) {
+      try {
+        return await appelerPollinations(model, avecSysteme);
+      } catch (e) {
+        console.warn("Pollinations indisponible :", model, e.message);
+      }
+    }
+    throw new Error("Aucune IA n'a répondu");
   }
 
   form.addEventListener("submit", async (e) => {
